@@ -7,29 +7,24 @@
 #include "ProceduralMeshComponent.h"
 #include "MeshData.generated.h"
 
+// Structure to hold mesh data
 USTRUCT(BlueprintType)
 struct FMeshData
 {
     GENERATED_BODY()
 
 public:
-    UPROPERTY(EditAnywhere, BlueprintReadonly)
-    TArray<FVector> vertices;
 
-    UPROPERTY(EditAnywhere, BlueprintReadonly)
-    TArray<int32> triangles;
-
-    UPROPERTY(EditAnywhere, BlueprintReadonly)
-    TArray<FVector2D> UVs;
-
-    UPROPERTY(EditAnywhere, BlueprintReadonly)
-    TArray<FVector> normals;
-
-    UPROPERTY(EditAnywhere, BlueprintReadonly)
-    TArray<FProcMeshTangent> tangents;
+	// Raw mesh data arrays
+    UPROPERTY(EditAnywhere, BlueprintReadOnly) TArray<FVector>             vertices;
+    UPROPERTY(EditAnywhere, BlueprintReadOnly) TArray<int32>               triangles;
+    UPROPERTY(EditAnywhere, BlueprintReadOnly) TArray<FVector2D>           UVs;
+    UPROPERTY(EditAnywhere, BlueprintReadOnly) TArray<FVector>             normals;
+    UPROPERTY(EditAnywhere, BlueprintReadOnly) TArray<FProcMeshTangent>    tangents;
 
     FMeshData() {}
 
+	// Copy constructor
     FMeshData(const FMeshData& meshData)
         : vertices(meshData.vertices)
         , triangles(meshData.triangles)
@@ -39,6 +34,7 @@ public:
     {
     }
 
+	// Move constructor
     FMeshData(FMeshData&& Other) noexcept
         : vertices(MoveTemp(Other.vertices))
         , triangles(MoveTemp(Other.triangles))
@@ -48,6 +44,7 @@ public:
     {
     }
 
+	// Pre-allocate arrays based on expected vertex count
     FMeshData(const FVector2D vertexCount, const bool includeNormalsAndTangents = false)
     {
         vertices.Reserve(vertexCount.X * vertexCount.Y);
@@ -61,19 +58,7 @@ public:
         }
     }
 
-    FMeshData& operator=(FMeshData&& Other) noexcept
-    {
-        if (this != &Other)
-        {
-            vertices = MoveTemp(Other.vertices);
-            triangles = MoveTemp(Other.triangles);
-            UVs = MoveTemp(Other.UVs);
-            normals = MoveTemp(Other.normals);
-            tangents = MoveTemp(Other.tangents);
-        }
-        return *this;
-    }
-
+    // Copy assignment
     FMeshData& operator=(const FMeshData& Other)
     {
         if (this != &Other)
@@ -86,8 +71,24 @@ public:
         }
         return *this;
     }
+
+	// Move assignment
+    FMeshData& operator=(FMeshData&& Other) noexcept
+    {
+        if (this != &Other)
+        {
+            vertices = MoveTemp(Other.vertices);
+            triangles = MoveTemp(Other.triangles);
+            UVs = MoveTemp(Other.UVs);
+            normals = MoveTemp(Other.normals);
+            tangents = MoveTemp(Other.tangents);
+        }
+        return *this;
+    }
 };
 
+
+// Directions for chunk borders
 UENUM(BlueprintType)
 enum class Direction : uint8 {
     Left    = 0, 
@@ -97,28 +98,25 @@ enum class Direction : uint8 {
     Center  = 4
 };
 
+// Structure to hold LOD information for a chunk, including downscale masks for borders
 USTRUCT(BlueprintType)
 struct FChunkLodInfos
 {
     GENERATED_BODY()
 
 public:
-    static constexpr uint8 mask_left    = (1 << (static_cast<uint8>(Direction::Left)));
-    static constexpr uint8 mask_right   = (1 << (static_cast<uint8>(Direction::Right)));
-    static constexpr uint8 mask_up      = (1 << (static_cast<uint8>(Direction::Up)));
-    static constexpr uint8 mask_down    = (1 << (static_cast<uint8>(Direction::Down)));
+	// Bitmask constants for directions
+    static constexpr uint8 mask_left    = (1u << (static_cast<uint8>(Direction::Left)));
+    static constexpr uint8 mask_right   = (1u << (static_cast<uint8>(Direction::Right)));
+    static constexpr uint8 mask_up      = (1u << (static_cast<uint8>(Direction::Up)));
+    static constexpr uint8 mask_down    = (1u << (static_cast<uint8>(Direction::Down)));
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    uint8           LOD;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    uint8           downscales_masked;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite) uint8           LOD;                    // Level of Detail
+	UPROPERTY(EditAnywhere, BlueprintReadWrite) uint8           downscales_masked;      // Bitmask for downscaled borders
 
-    FChunkLodInfos()
-        :LOD(0), downscales_masked(0)
-    {}
-
-    FChunkLodInfos(uint8 LODin, bool left, bool right, bool up, bool down)
-        :LOD(LODin), downscales_masked(0)
+    FChunkLodInfos()                                                            :   LOD(0),     downscales_masked(0)            {}
+    FChunkLodInfos(uint8 LODin, uint8 downscalesIn)                             :   LOD(LODin), downscales_masked(downscalesIn) {}
+    FChunkLodInfos(uint8 LODin, bool left, bool right, bool up, bool down)      :   LOD(LODin), downscales_masked(0)
     {
         if (left)
             downscales_masked = mask_left;
@@ -130,18 +128,14 @@ public:
             downscales_masked |= mask_down;
     }
 
-    FChunkLodInfos(uint8 LODin, uint8 downscalesIn)
-        :LOD(LODin), downscales_masked(downscalesIn)
-    {
-    }
-
     FORCEINLINE bool GetDownscale(Direction direction)const
     {
-        const int mask = (1 << (static_cast<int>(direction)));
-        return downscales_masked & mask;
+        const int8 mask = (1u << static_cast<int>(direction));
+        return (downscales_masked & mask) != 0;
     }
 };
 
+// Structure to manage which LODs are active for a chunk
 USTRUCT(BlueprintType)
 struct FChunkLodSelector
 {
@@ -149,8 +143,18 @@ struct FChunkLodSelector
 
 private:
     TArray<bool>    m_LODs;
-    uint8           m_activeLODs;
+    uint8           m_activeLODs = 0;
 public:
+
+    FORCEINLINE uint8 GetActiveLODs()const { return m_activeLODs; }
+
+    FORCEINLINE bool GetLOD(uint8 LOD)const
+    {
+        check(m_LODs.IsValidIndex(LOD));
+        return m_LODs[LOD];
+    }
+
+	// Initialize the LOD selector with a given number of LODs
     FORCEINLINE FChunkLodSelector& InitializeNum(uint8 size)
     {
         m_LODs.SetNum(size+1);
@@ -160,37 +164,29 @@ public:
 
     FORCEINLINE FChunkLodSelector& SetLOD(uint8 indx, bool newValue)
     {
-        if (m_LODs[indx] > newValue)
-            m_activeLODs--;
-        else if (m_LODs[indx] < newValue)
-            m_activeLODs++;
+		check(m_LODs.IsValidIndex(indx));
 
-        m_LODs[indx] = newValue;
+        if (m_LODs[indx] != newValue)
+        {
+            if (newValue) { ++m_activeLODs; }
+            else { --m_activeLODs; }
+            m_LODs[indx] = newValue;
+        }
 
         return *this;
     }
-
-    FORCEINLINE bool GetLOD(uint8 LOD)const
-    {
-        check(LOD < m_LODs.Num());
-        return m_LODs[LOD];
-    }
-
-    FORCEINLINE uint8 GetActiveLODs()const 
-    {
-        return m_activeLODs;
-    }
 };
 
+// Structure to hold mesh data for a specific LOD of a chunk
 USTRUCT(BlueprintType)
 struct FChunkLodData
 {
     GENERATED_BODY()
 
 public:
-    FMeshData Center;
-    FMeshData borders_normal[4];
-    FMeshData borders_downscaled[4];
+    FMeshData           Center;
+    FMeshData           borders_normal[4];
+    FMeshData           borders_downscaled[4];
 
     FChunkLodData() = default;
     FChunkLodData(const FChunkLodData& Other) = default;
@@ -199,55 +195,65 @@ public:
     FChunkLodData& operator=(FChunkLodData&& Other) noexcept = default;
 };
 
+// Structure to manage multiple LODs for a chunk
 USTRUCT(BlueprintType)
 struct FChunkData
 {
     GENERATED_BODY()
 
 private:
-    TArray<FChunkLodData>   LODs;
-    uint32                  Initialized;
+    TArray<FChunkLodData>   m_LODs;
+    uint32                  m_LODMask = 0;
 public:
+
+    inline bool ContainsLOD(uint8 index) const 
+    { 
+		check(index < 32);
+        return (m_LODMask & (1u << index)) != 0; 
+    }
+
+    FORCEINLINE FChunkLodData& GetLOD(uint8 index) 
+    {
+		check(m_LODs.IsValidIndex(index));
+        return m_LODs[index]; 
+    }
 
     void Reset()
     {
-        LODs.Empty();
-        Initialized = false;
+        m_LODs.Reset();
+        m_LODMask = 0;
     }
 
-    FORCEINLINE void Initialize(uint8 maxLOD)
+	// Initialize the chunk data with a maximum LOD
+    void Initialize(uint8 maxLOD)
     {
-        LODs.SetNum(maxLOD + 1);
-        Initialized = 0;
-    }
-
-    FORCEINLINE void AddNewLOD(uint8 index, FChunkLodData&& data)
-    {
-        LODs[index] = MoveTemp(data);
-        Initialized = Initialized | (1 << index);
-    }
-
-    FORCEINLINE bool ContainsLOD(uint8 index)
-    {
-        return Initialized & (1 << index);
-    }
-
-    FORCEINLINE FChunkLodData& GetLOD(uint8 index)
-    {
-        return LODs[index];
+		check(maxLOD < 32);
+        m_LODs.SetNum(maxLOD + 1);
+        m_LODMask = 0;
     }
 
     FORCEINLINE void RemoveLOD(uint8 index)
     {
-        delete& LODs[index];
-        Initialized = Initialized & (~(1 << index));
+		check(m_LODs.IsValidIndex(index));
+        m_LODs[index] = FChunkLodData{};
+        m_LODMask &= (~(1u << index));
     }
 
-    FORCEINLINE int GetMaxLowerLOD(const int32 maxLOD)
+    FORCEINLINE void AddNewLOD(uint8 index, FChunkLodData&& data)
     {
+		check(m_LODs.IsValidIndex(index));
+
+        m_LODs[index] = MoveTemp(data);
+        m_LODMask |= (1u << index);
+    }
+
+    FORCEINLINE int32 GetMaxLowerLOD(int32 maxLOD) const
+    {
+		maxLOD = FMath::Min<int32>(maxLOD, m_LODs.Num() - 1);
+
         for (int32 i = maxLOD; i > 0; i--)
         {
-            if ((1 << i) & Initialized)
+            if ((1u << i) & m_LODMask)
             {
                 return i;
             }
@@ -255,11 +261,13 @@ public:
         return 0;
     }
 
-    FORCEINLINE int GetMinHigherLOD(const int32 maxLOD)
+    FORCEINLINE int32 GetMinHigherLOD(int32 maxLOD) const
     {
-        for (int32 i = maxLOD; i <= LODs.Num(); i++)
+		maxLOD = FMath::Max<int32>(maxLOD, 0);
+
+        for (int32 i = maxLOD; i < m_LODs.Num(); i++)
         {
-            if ((1 << i) & Initialized)
+            if ((1u << i) & m_LODMask)
             {
                 return i;
             }
@@ -269,19 +277,16 @@ public:
 
 };
 
-
+// Structure to select a specific part of a chunk based on LOD and border direction
 USTRUCT(BlueprintType, meta = (HasNativeMake, HasNativeBreak))
 struct FChunkPartSelector
 {
     GENERATED_BODY()
 
 public:
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    bool        downscaled;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    Direction   borderDirection;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    uint8       LOD;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite) bool            downscaled;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite) Direction       borderDirection;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite) uint8           LOD;
 
     FChunkPartSelector() 
         :   downscaled(false),
@@ -307,14 +312,10 @@ struct FArrayUint8
     GENERATED_BODY()
 public:
 
-    UPROPERTY(EditAnywhere, BlueprintReadonly)
+    UPROPERTY(EditAnywhere, BlueprintReadOnly)
     TArray<uint8> array;
 
-    FArrayUint8()
-    {
-
-    }
-
+    FArrayUint8() {}
     FArrayUint8(uint32 size)
     {
         array.SetNum(size);

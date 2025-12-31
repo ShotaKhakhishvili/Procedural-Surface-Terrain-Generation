@@ -93,7 +93,7 @@ void UChunkComponent::RefreshChunkVisibility()
     //SetMeshSectionVisible(sectionIndex_up_downscaled, true);
 
     m_visibleSections.Add(sectionIndex_center);
-    //m_visibleSections.Add(sectionIndex_up_normal);
+    //m_visibleSections.Add(sectionIndex_up_normal); 
     //m_visibleSections.Add(sectionIndex_up_downscaled);
 
     //UE_LOG(LogTemp, Warning, TEXT("Center index : %d"), static_cast<uint8>(sectionIndex_center));
