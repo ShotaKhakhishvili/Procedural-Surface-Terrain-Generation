@@ -1,9 +1,9 @@
 ﻿#include "MeshFunctionLibrary.h"
 
 void UMeshStaticLibrary::CalculateNormals(
-	const TArray<FVector>& Vertices,
-	const TArray<int32>& Indices,
-	TArray<FVector>& OutNormals
+	const TArray<FVector>&		Vertices,
+	const TArray<int32>&		Indices,
+	TArray<FVector>&			OutNormals
 )
 {
 	const int32 VertexCount = Vertices.Num();
