@@ -26,7 +26,9 @@ void UChunkComponent::AddLodData(FChunkLodData& chunkLodData, const uint8 LOD)
     CreateNewMeshSection(chunkLodData.Center, FChunkPartSelector(LOD, Direction::Center));
 
     CreateNewMeshSection(chunkLodData.borders_normal[static_cast<uint8>(Direction::Up)], FChunkPartSelector(LOD, Direction::Up));
-    //CreateNewMeshSection(chunkLodData.borders_normal[static_cast<uint8>(Direction::Up)], FChunkPartSelector(LOD, Direction::Up, true));
+    CreateNewMeshSection(chunkLodData.borders_normal[static_cast<uint8>(Direction::Up)], FChunkPartSelector(LOD, Direction::Up, true));
+    CreateNewMeshSection(chunkLodData.borders_normal[static_cast<uint8>(Direction::Down)], FChunkPartSelector(LOD, Direction::Down));
+    CreateNewMeshSection(chunkLodData.borders_normal[static_cast<uint8>(Direction::Down)], FChunkPartSelector(LOD, Direction::Down, true));
 
     m_chunkData.AddNewLOD(LOD, MoveTemp(chunkLodData));
 }
@@ -95,13 +97,13 @@ void UChunkComponent::RefreshChunkVisibility()
     SetMeshSectionVisible(sectionIndex_up_normal, true);
     SetMeshSectionVisible(sectionIndex_up_downscaled, false);
     SetMeshSectionVisible(sectionIndex_down_normal, false);
-    SetMeshSectionVisible(sectionIndex_down_downscaled, false);
+    SetMeshSectionVisible(sectionIndex_down_downscaled, true);
 
     m_visibleSections.Add(sectionIndex_center);
     m_visibleSections.Add(sectionIndex_up_normal); 
     //m_visibleSections.Add(sectionIndex_up_downscaled);
     //m_visibleSections.Add(sectionIndex_down_normal);
-    //m_visibleSections.Add(sectionIndex_down_downscaled);
+    m_visibleSections.Add(sectionIndex_down_downscaled);
 
     //UE_LOG(LogTemp, Warning, TEXT("Center index : %d"), static_cast<uint8>(sectionIndex_center));
     //UE_LOG(LogTemp, Warning, TEXT("Up normal index : %d"), static_cast<uint8>(sectionIndex_up_normal));

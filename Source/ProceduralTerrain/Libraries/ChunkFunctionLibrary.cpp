@@ -124,101 +124,149 @@ FMeshData UChunkFunctionLibrary::GetChunkData_Border_Up(const TArray<FVector>& w
 
 FMeshData UChunkFunctionLibrary::GetChunkData_Border_Down(
     const TArray<FVector>& wholeChunk_additionalsVerts,
-    const uint8 LOD,
-    const bool downscale
+    const uint8            LOD,
+    const bool             downscale
 )
 {
-    const int32 MaxWidth = (1 << m_maxLOD) + 3;
-    const int32 Step = (1 << (m_maxLOD - LOD));
-    const int32 RealWidth = (1 << LOD) + 3;
+    const int32 dataWidth = (1 << m_maxLOD) + 3;
+    const int32 step = (1 << (m_maxLOD - LOD));
+    const int32 realWidth = (1 << LOD) + 3;
+    const int32 edge = step * 3 + 1;
 
-    constexpr int32 TempRows = 4; // neighbor-inner, neighbor-border, this-border, this-inner
+    UE_LOG(LogTemp, Log, TEXT("Down Border | Step: %d, realWidth: %d"), step, realWidth);
 
-    FMeshData Temp(FVector2D(RealWidth, TempRows), false);
+    FMeshData Mesh(FVector2D(realWidth, 4), false);
 
-    int32 writeIdx = 0;
-
-    // The bottom border starts from the last rows of the grid
-    for (int32 r = 0; r < TempRows; ++r)
-    {
-        // Rows are counted from the bottom
-        const int32 baseY = (MaxWidth - 1) - (TempRows - 1) * Step;
-        const int32 SrcY = baseY + r * Step;
-        const int32 borderRow = r;
-
-        for (int32 c = 0; c < RealWidth; ++c)
+    auto AddVU = [&](const FVector& V)
         {
-            const int32 SrcX = c * Step;
-            const int32 SrcIdx = SrcY * MaxWidth + SrcX;
+            Mesh.vertices.Add(V);
+            Mesh.UVs.Add(FVector2D(V.X, V.Y) * m_UVScale);
+        };
 
-            FVector V = wholeChunk_additionalsVerts[SrcIdx];
+    // LocalY goes "upward from bottom border" (0..edge) -> SrcY goes (dataWidth-1 .. downwards)
+    auto SrcYFromLocalY = [&](int32 LocalY) -> int32
+        {
+            return (dataWidth - 1) - LocalY;
+        };
 
-            if (downscale && borderRow == 2 && (c & 1))
+    // ---- Row 0 (outermost bottom border row) ----
+    {
+        const int32 SrcY = dataWidth - 1;
+
+        AddVU(wholeChunk_additionalsVerts[SrcY * dataWidth + 0]);
+
+        for (int32 X = 1; X < dataWidth - 1; X += step)
+        {
+            AddVU(wholeChunk_additionalsVerts[SrcY * dataWidth + X]);
+        }
+
+        AddVU(wholeChunk_additionalsVerts[SrcY * dataWidth + (dataWidth - 1)]);
+    }
+
+    // ---- Next rows going upward from the bottom border region ----
+    const int32 MaxLocalY = FMath::Min(edge, dataWidth - 1); // safety
+    for (int32 LocalY = 1; LocalY <= MaxLocalY; LocalY += step)
+    {
+        const int32 SrcY = SrcYFromLocalY(LocalY);
+
+        // left edge
+        AddVU(wholeChunk_additionalsVerts[SrcY * dataWidth + 0]);
+
+        for (int32 X = 1; X < dataWidth - 1; X += step)
+        {
+            const int32 SrcIdx = SrcY * dataWidth + X;
+
+            // Same stitch condition as Up (just on the "first inner stitch row" of this border patch)
+            if (downscale && LocalY == (step + 1) && ((X - 1) % (step * 2) == step))
             {
-                const int32 L = SrcIdx - Step;
-                const int32 R = SrcIdx + Step;
+                const int32 Lx = FMath::Clamp(X - step, 0, dataWidth - 1);
+                const int32 Rx = FMath::Clamp(X + step, 0, dataWidth - 1);
 
-                V = 0.5f * (
-                    wholeChunk_additionalsVerts[L] +
-                    wholeChunk_additionalsVerts[R]
-                    );
+                const FVector V =
+                    0.5f * (wholeChunk_additionalsVerts[SrcY * dataWidth + Lx] +
+                        wholeChunk_additionalsVerts[SrcY * dataWidth + Rx]);
+
+                AddVU(V);
             }
-
-            Temp.vertices.Add(V);
-            Temp.UVs.Add(FVector2D(V.X, V.Y) * m_UVScale);
-
-            if (r > 0 && c > 0)
+            else
             {
-                const int32 A = writeIdx;
-                const int32 B = A - RealWidth;
-                const int32 C = B - 1;
-                const int32 D = A - 1;
-
-                Temp.triangles.Append({ A, B, C, A, C, D });
+                AddVU(wholeChunk_additionalsVerts[SrcIdx]);
             }
+        }
 
-            ++writeIdx;
+        // right edge
+        AddVU(wholeChunk_additionalsVerts[SrcY * dataWidth + (dataWidth - 1)]);
+    }
+
+    // ------------------------------------------------------------
+    // FIX FOR "FLIPPED" RESULT:
+    // Because this border patch is generated while moving "up" in world Y
+    // (SrcY decreases as we append rows), the winding would be inverted if
+    // we used the same triangle order as Border_Up.
+    // So we reverse the winding here (swap B<->C per triangle).
+    // ------------------------------------------------------------
+    for (int32 i = 1; i < 4; i++)
+    {
+        for (int32 j = 1; j < realWidth; j++)
+        {
+            const int32 B = (i - 1) * realWidth + j;
+            const int32 C = B - 1;
+            const int32 D = i * realWidth + j - 1;
+            const int32 A = D + 1;
+
+            // reversed winding vs Up
+            Mesh.triangles.Append({ A, C, B,  A, D, C });
         }
     }
 
     UKismetProceduralMeshLibrary::CalculateTangentsForMesh(
-        Temp.vertices,
-        Temp.triangles,
-        Temp.UVs,
-        Temp.normals,
-        Temp.tangents
+        Mesh.vertices,
+        Mesh.triangles,
+        Mesh.UVs,
+        Mesh.normals,
+        Mesh.tangents
     );
 
-    FMeshData Final(FVector2D(RealWidth, 2), true);
+    // ---- Cut out the same "green strip" as Border_Up ----
+    FMeshData Final(FVector2D(realWidth, 2), true);
 
-    // copy vertices (bottom two rows)
-    for (int32 r = 2; r <= 3; ++r)
+    for (int32 i = realWidth + 1; i < 2 * realWidth - 1; i++)
     {
-        for (int32 c = 0; c < RealWidth; ++c)
-        {
-            const int32 src = r * RealWidth + c;
-
-            Final.vertices.Add(Temp.vertices[src]);
-            Final.UVs.Add(Temp.UVs[src]);
-            Final.normals.Add(Temp.normals[src]);
-            Final.tangents.Add(Temp.tangents[src]);
-        }
+        Final.vertices.Add(Mesh.vertices[i]);
+        Final.UVs.Add(Mesh.UVs[i]);
+        Final.tangents.Add(Mesh.tangents[i]);
+        Final.normals.Add(Mesh.normals[i]);
     }
 
-    // rebuild triangles (2 rows only)
-    for (int32 c = 1; c < RealWidth; ++c)
+    for (int32 i = 2 * realWidth + 2; i < 3 * realWidth - 2; i++)
     {
-        const int32 A = RealWidth + c;
-        const int32 B = c;
-        const int32 C = c - 1;
-        const int32 D = A - 1;
-
-        Final.triangles.Append({ A, B, C, A, C, D });
+        Final.vertices.Add(Mesh.vertices[i]);
+        Final.UVs.Add(Mesh.UVs[i]);
+        Final.tangents.Add(Mesh.tangents[i]);
+        Final.normals.Add(Mesh.normals[i]);
     }
+
+    // Rebuild Final triangles with the SAME reversed winding
+    for (int32 i = realWidth - 2; i < 2 * realWidth - 7; i++)
+    {
+        const int32 A = i - (realWidth - 3);
+        const int32 B = A + 1;
+        const int32 C = i;
+
+        // original was: { C, i+1, B,  A, C, B }
+        // reversed winding:
+        Final.triangles.Append({ C, B, i + 1,  A, B, C });
+    }
+
+    // original was: { 1, 0, realWidth-2,  realWidth-3, realWidth-4, 2*realWidth-7 }
+    // reversed per-triangle:
+    Final.triangles.Append({
+        1, realWidth - 2, 0,
+        realWidth - 3, 2 * realWidth - 7, realWidth - 4
+        });
 
     return Final;
 }
-
 
 FMeshData UChunkFunctionLibrary::GetChunkData_Border_Left(const FMeshData& wholeChunk_additionals_MaxLOD, const uint8 LOD, const bool downscale)
 {
@@ -405,8 +453,8 @@ FChunkLodData& UChunkFunctionLibrary::GenerateChunkData_LOD(
     result->Center = GetChunkData_Center(wholeChunk_additionals, Pos, LOD);
     result->borders_normal[static_cast<uint8>(Direction::Up)] = GetChunkData_Border_Up(wholeChunk_additionals_maxLOD, LOD, false);
     result->borders_downscaled[static_cast<uint8>(Direction::Up)] = GetChunkData_Border_Up(wholeChunk_additionals_maxLOD, LOD, true);
-    //result->borders_normal[static_cast<uint8>(Direction::Down)] = GetChunkData_Border_Down(wholeChunk_additionals_maxLOD, LOD, false);
-    //result->borders_downscaled[static_cast<uint8>(Direction::Down)] = GetChunkData_Border_Down(wholeChunk_additionals_maxLOD, LOD, true);
+    result->borders_normal[static_cast<uint8>(Direction::Down)] = GetChunkData_Border_Down(wholeChunk_additionals_maxLOD, LOD, false);
+    result->borders_downscaled[static_cast<uint8>(Direction::Down)] = GetChunkData_Border_Down(wholeChunk_additionals_maxLOD, LOD, true);
 
     /*
         Borders will be implemented here too.
