@@ -22,26 +22,27 @@ FMeshData UChunkFunctionLibrary::GetChunkData_Border_Up(const TArray<FVector>& w
         false
     );
 
-    int32 realIndx = 0;
+    int32 realIndx = 1;
+
+    Mesh.vertices.Add(wholeChunk_additionalsVerts[0]);
+    Mesh.UVs.Add(FVector2D(wholeChunk_additionalsVerts[0].X, wholeChunk_additionalsVerts[0].Y) * m_UVScale);
 
     // The first now, we only add verices and UVs, we don't create triangles
-    for (int32 X = 0; X < dataWidth - 1; X += step)
+    for (int32 X = 1; X < dataWidth - 1; X += step)
     {
         Mesh.vertices.Add(wholeChunk_additionalsVerts[X]);
         Mesh.UVs.Add(FVector2D(wholeChunk_additionalsVerts[X].X, wholeChunk_additionalsVerts[X].Y) * m_UVScale);
-        realIndx++;
     }
 
-    Mesh.vertices.Add(wholeChunk_additionalsVerts[dataWidth-1]);
+    Mesh.vertices.Add(wholeChunk_additionalsVerts[dataWidth - 1]);
     Mesh.UVs.Add(FVector2D(wholeChunk_additionalsVerts[dataWidth - 1].X, wholeChunk_additionalsVerts[dataWidth - 1].Y) * m_UVScale);
-    realIndx++;
+
 
     // In the lower parts, we add a vertice, and then, in the inner loop, we add vertice and two corresponding triangle too
-    for (int32 Y = 1; Y <= 1; Y += step)
+    for (int32 Y = 1; Y <= edge; Y += step)
     {
         Mesh.vertices.Add(wholeChunk_additionalsVerts[Y * dataWidth]);
         Mesh.UVs.Add(FVector2D(wholeChunk_additionalsVerts[Y * dataWidth].X, wholeChunk_additionalsVerts[Y * dataWidth].Y) * m_UVScale);
-        realIndx++;
 
         for (int32 X = 1; X < dataWidth - 1; X += step)
         {
@@ -60,26 +61,25 @@ FMeshData UChunkFunctionLibrary::GetChunkData_Border_Up(const TArray<FVector>& w
                 Mesh.vertices.Add(wholeChunk_additionalsVerts[Indx]);
             }
             Mesh.UVs.Add(FVector2D(wholeChunk_additionalsVerts[Indx].X, wholeChunk_additionalsVerts[Indx].Y) * m_UVScale);
-
-            realIndx++;
-
-            const int32 B = realIndx - realWidth;
-            const int32 C = B - 1;
-            const int32 D = realIndx - 1;
-
-            UE_LOG(LogTemp, Log, TEXT("B: %d, C: %d, D: %d, realIndex: %d"), B, C, D, realIndx);
-
-            Mesh.triangles.Append({ realIndx, B, C,  realIndx, C, D });
         }
 
         Mesh.vertices.Add(wholeChunk_additionalsVerts[(dataWidth - 1) + Y * dataWidth]);
         Mesh.UVs.Add(FVector2D(wholeChunk_additionalsVerts[(dataWidth - 1) + Y * dataWidth].X, wholeChunk_additionalsVerts[(dataWidth - 1) + Y * dataWidth].Y) * m_UVScale);
-        realIndx++;
+    }
 
-        const int32 B = realIndx - realWidth;
-        const int32 C = B - 1;
-        const int32 D = realIndx - 1;
-        Mesh.triangles.Append({ realIndx, B, C,  realIndx, C, D });
+    //Mesh.triangles.Append({ 2 * realWidth + 1 , realWidth + 1, realWidth});
+
+    for (int32 i = 1; i < 4; i++)
+    {
+        for (int32 j = 1; j < realWidth; j++)
+        {
+            const int32 B = (i - 1) * realWidth + j;
+            const int32 C = B - 1;
+            const int32 D = i * realWidth + j - 1;
+            const int32 A = D + 1;
+    
+            Mesh.triangles.Append({ A, B, C, A, C, D });
+        }
     }
 
     UKismetProceduralMeshLibrary::CalculateTangentsForMesh(

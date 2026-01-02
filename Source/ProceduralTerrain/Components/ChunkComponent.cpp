@@ -26,7 +26,7 @@ void UChunkComponent::AddLodData(FChunkLodData& chunkLodData, const uint8 LOD)
     CreateNewMeshSection(chunkLodData.Center, FChunkPartSelector(LOD, Direction::Center));
 
     CreateNewMeshSection(chunkLodData.borders_normal[static_cast<uint8>(Direction::Up)], FChunkPartSelector(LOD, Direction::Up));
-    CreateNewMeshSection(chunkLodData.borders_normal[static_cast<uint8>(Direction::Up)], FChunkPartSelector(LOD, Direction::Up, true));
+    //CreateNewMeshSection(chunkLodData.borders_normal[static_cast<uint8>(Direction::Up)], FChunkPartSelector(LOD, Direction::Up, true));
 
     m_chunkData.AddNewLOD(LOD, MoveTemp(chunkLodData));
 }
