@@ -46,31 +46,34 @@ public:
     static FORCEINLINE float GetUVScale()           { return m_UVScale;             }
     static FORCEINLINE uint8 GetMaxLOD()            { return m_maxLOD;              }
 
-    static FMeshData GetChunkData_Border_Up     (const FMeshData& wholeChunk_additionals_MaxLOD, const uint8 LOD, const bool downscale);
-    static FMeshData GetChunkData_Border_Down   (const FMeshData& wholeChunk_additionals_MaxLOD, const uint8 LOD, const bool downscale);
+    static FMeshData GetChunkData_Border_Up     (
+                                                const TArray<FVector>&      wholeChunk_additionalsVerts, 
+                                                const uint8                 LOD, 
+                                                const bool                  downscale
+                                                );
+    static FMeshData GetChunkData_Border_Down   (
+                                                const TArray<FVector>&      wholeChunk_additionalsVerts,
+                                                const uint8                 LOD,
+                                                const bool                  downscale
+                                                );
     static FMeshData GetChunkData_Border_Left   (const FMeshData& wholeChunk_additionals_MaxLOD, const uint8 LOD, const bool downscale);
     static FMeshData GetChunkData_Border_Right  (const FMeshData& wholeChunk_additionals_MaxLOD, const uint8 LOD, const bool downscale);
 
-    static TArray<float>& GetTopLod_Center_Vertices( // Simply, only generating the Z positions of the vertices of the LOD 0 chunk's center.
+    static TArray<float> GetTopLod_Vertices( // Simply, only generating the Z positions of the vertices of the LOD 0 chunk
         const FVector2D&            Pos
     );
 
-    static TArray<float>& GetLod_Additionals_Vertices
+    static TArray<FVector> GetLod_Additionals_Vertices
     (
         const TArray<float>&        topLodVertices,
         const FVector2D             Pos,
         const uint8                 LOD
     );
-
+     
     static FMeshData GetChunkData_Center(
-        const TArray<float>&        wholeChunk_additionals,
+        const TArray<FVector>&        wholeChunk_additionals,
         const FVector2D             Pos,
         const int8                  LOD
-    );
-
-    static FMeshData GetChunkData_Border(
-        const FMeshData&            wholeChunk_additionals,
-        const FChunkPartSelector&   chunkPartSelector
     );
 
     static FChunkLodData& GenerateChunkData_LOD(

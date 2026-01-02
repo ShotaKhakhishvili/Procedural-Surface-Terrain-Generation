@@ -8,70 +8,198 @@ float		UChunkFunctionLibrary::m_chunkWidth         = 12800;
 float       UChunkFunctionLibrary::m_UVScale            = 0.1;
 uint8       UChunkFunctionLibrary::m_maxLOD             = 8;
 
-FMeshData UChunkFunctionLibrary::GetChunkData_Border_Up(const FMeshData& wholeChunk_additionals_MaxLOD, const uint8 LOD, const bool downscale)
+FMeshData UChunkFunctionLibrary::GetChunkData_Border_Up(
+    const TArray<FVector>& wholeChunk_additionalsVerts,
+    const uint8 LOD,
+    const bool downscale
+)
 {
-    const int32 dataWidth = (1 << m_maxLOD) + 3;
-    const int32 step = (1 << (m_maxLOD - LOD));
-    const int32 realWidth = (1 << LOD) + 3;
-    const int32 edge = step * 4;
+    const int32 MaxWidth = (1 << m_maxLOD) + 3;
+    const int32 Step = (1 << (m_maxLOD - LOD));
+    const int32 RealWidth = (1 << LOD) + 3;
 
-    FMeshData Mesh(
-        FVector2D(realWidth, 4),
-        false
-    );
+    constexpr int32 TempRows = 4;
 
-    int32 realIndx = 0;
-    for (int32 Y = 0; Y < edge; Y += step)
+    FMeshData Temp(FVector2D(RealWidth, TempRows), false);
+
+    int32 writeIdx = 0;
+
+    for (int32 r = 0; r < TempRows; ++r)
     {
-        Mesh.vertices.Add(wholeChunk_additionals_MaxLOD.vertices[Y * dataWidth]);
-        Mesh.UVs.Add(wholeChunk_additionals_MaxLOD.UVs[Y * dataWidth]);
-        realIndx++;
+        const int32 SrcY = r * Step;
+        const int32 borderRow = r;
 
-        for (int32 X = 1; X < dataWidth - 1; X += step)
+        for (int32 c = 0; c < RealWidth; ++c)
         {
-            const int32 Indx = Y * dataWidth + X;
-            if (downscale && X % (step * 2) && Y < 2 * step)
-            {
-                Mesh.vertices.Add(0.5f * (wholeChunk_additionals_MaxLOD.vertices[FMath::Max(Indx - step, 0)] +
-                    wholeChunk_additionals_MaxLOD.vertices[FMath::Min(Indx + step, dataWidth - 1)]
-                    ));
-            }
-            else
-            {
-                Mesh.vertices.Add(wholeChunk_additionals_MaxLOD.vertices[Indx]);
-            }
-            Mesh.UVs.Add(wholeChunk_additionals_MaxLOD.UVs[Indx]);
+            const int32 SrcX = c * Step;
+            const int32 SrcIdx = SrcY * MaxWidth + SrcX;
 
-            if (Y > step)
+            FVector V = wholeChunk_additionalsVerts[SrcIdx];
+
+            if (downscale && borderRow == 1 && (c & 1))
             {
-                const int32 B = realIndx - realWidth;
+                const int32 L = SrcIdx - Step;
+                const int32 R = SrcIdx + Step;
+
+                V = 0.5f * (
+                    wholeChunk_additionalsVerts[L] +
+                    wholeChunk_additionalsVerts[R]
+                    );
+            }
+
+            Temp.vertices.Add(V);
+            Temp.UVs.Add(FVector2D(V.X, V.Y) * m_UVScale);
+
+            if (r > 0 && c > 0)
+            {
+                const int32 A = writeIdx;
+                const int32 B = A - RealWidth;
                 const int32 C = B - 1;
-                const int32 D = realIndx - 1;
-                Mesh.triangles.Append({ realIndx, B, C,  realIndx, C, D });
+                const int32 D = A - 1;
+
+                Temp.triangles.Append({ A, B, C, A, C, D });
             }
-            realIndx++;
-        }
 
-        Mesh.vertices.Add(wholeChunk_additionals_MaxLOD.vertices[(Y + 1) * dataWidth - 1]);
-        Mesh.UVs.Add(wholeChunk_additionals_MaxLOD.UVs[(Y + 1) * dataWidth - 1]);
-        realIndx++;
-
-        if (Y > step)
-        {
-            const int32 B = realIndx - realWidth;
-            const int32 C = B - 1;
-            const int32 D = realIndx - 1;
-            Mesh.triangles.Append({ realIndx, B, C,  realIndx, C, D });
+            ++writeIdx;
         }
     }
 
-    return Mesh;
+    UKismetProceduralMeshLibrary::CalculateTangentsForMesh(
+        Temp.vertices,
+        Temp.triangles,
+        Temp.UVs,
+        Temp.normals,
+        Temp.tangents
+    );
+
+    FMeshData Final(FVector2D(RealWidth, 2), true);
+
+    // copy vertices
+    for (int32 r = 1; r <= 2; ++r)
+    {
+        for (int32 c = 0; c < RealWidth; ++c)
+        {
+            const int32 src = r * RealWidth + c;
+
+            Final.vertices.Add(Temp.vertices[src]);
+            Final.UVs.Add(Temp.UVs[src]);
+            Final.normals.Add(Temp.normals[src]);
+            Final.tangents.Add(Temp.tangents[src]);
+        }
+    }
+
+    // rebuild triangles (2 rows only)
+    for (int32 c = 1; c < RealWidth; ++c)
+    {
+        const int32 A = RealWidth + c;
+        const int32 B = c;
+        const int32 C = c - 1;
+        const int32 D = A - 1;
+
+        Final.triangles.Append({ A, B, C, A, C, D });
+    }
+
+    return Final;
 }
 
-FMeshData UChunkFunctionLibrary::GetChunkData_Border_Down(const FMeshData& wholeChunk_additionals_MaxLOD, const uint8 LOD, const bool downscale)
+FMeshData UChunkFunctionLibrary::GetChunkData_Border_Down(
+    const TArray<FVector>& wholeChunk_additionalsVerts,
+    const uint8 LOD,
+    const bool downscale
+)
 {
-    return *(new FMeshData());
+    const int32 MaxWidth = (1 << m_maxLOD) + 3;
+    const int32 Step = (1 << (m_maxLOD - LOD));
+    const int32 RealWidth = (1 << LOD) + 3;
+
+    constexpr int32 TempRows = 4; // neighbor-inner, neighbor-border, this-border, this-inner
+
+    FMeshData Temp(FVector2D(RealWidth, TempRows), false);
+
+    int32 writeIdx = 0;
+
+    // The bottom border starts from the last rows of the grid
+    for (int32 r = 0; r < TempRows; ++r)
+    {
+        // Rows are counted from the bottom
+        const int32 baseY = (MaxWidth - 1) - (TempRows - 1) * Step;
+        const int32 SrcY = baseY + r * Step;
+        const int32 borderRow = r;
+
+        for (int32 c = 0; c < RealWidth; ++c)
+        {
+            const int32 SrcX = c * Step;
+            const int32 SrcIdx = SrcY * MaxWidth + SrcX;
+
+            FVector V = wholeChunk_additionalsVerts[SrcIdx];
+
+            if (downscale && borderRow == 2 && (c & 1))
+            {
+                const int32 L = SrcIdx - Step;
+                const int32 R = SrcIdx + Step;
+
+                V = 0.5f * (
+                    wholeChunk_additionalsVerts[L] +
+                    wholeChunk_additionalsVerts[R]
+                    );
+            }
+
+            Temp.vertices.Add(V);
+            Temp.UVs.Add(FVector2D(V.X, V.Y) * m_UVScale);
+
+            if (r > 0 && c > 0)
+            {
+                const int32 A = writeIdx;
+                const int32 B = A - RealWidth;
+                const int32 C = B - 1;
+                const int32 D = A - 1;
+
+                Temp.triangles.Append({ A, B, C, A, C, D });
+            }
+
+            ++writeIdx;
+        }
+    }
+
+    UKismetProceduralMeshLibrary::CalculateTangentsForMesh(
+        Temp.vertices,
+        Temp.triangles,
+        Temp.UVs,
+        Temp.normals,
+        Temp.tangents
+    );
+
+    FMeshData Final(FVector2D(RealWidth, 2), true);
+
+    // copy vertices (bottom two rows)
+    for (int32 r = 2; r <= 3; ++r)
+    {
+        for (int32 c = 0; c < RealWidth; ++c)
+        {
+            const int32 src = r * RealWidth + c;
+
+            Final.vertices.Add(Temp.vertices[src]);
+            Final.UVs.Add(Temp.UVs[src]);
+            Final.normals.Add(Temp.normals[src]);
+            Final.tangents.Add(Temp.tangents[src]);
+        }
+    }
+
+    // rebuild triangles (2 rows only)
+    for (int32 c = 1; c < RealWidth; ++c)
+    {
+        const int32 A = RealWidth + c;
+        const int32 B = c;
+        const int32 C = c - 1;
+        const int32 D = A - 1;
+
+        Final.triangles.Append({ A, B, C, A, C, D });
+    }
+
+    return Final;
 }
+
+
 FMeshData UChunkFunctionLibrary::GetChunkData_Border_Left(const FMeshData& wholeChunk_additionals_MaxLOD, const uint8 LOD, const bool downscale)
 {
     return *(new FMeshData());
@@ -81,14 +209,13 @@ FMeshData UChunkFunctionLibrary::GetChunkData_Border_Right(const FMeshData& whol
     return *(new FMeshData());
 }
 
-TArray<float>& UChunkFunctionLibrary::GetTopLod_Center_Vertices(const FVector2D& Pos)
+TArray<float> UChunkFunctionLibrary::GetTopLod_Vertices(const FVector2D& Pos)
 {
     const int32 Width = (1 << m_maxLOD) + 1;
     const float Cell = m_chunkWidth / (Width - 1);
 
-    /* ---------- center mesh ---------- */
-    TArray<float>* vertices = new TArray<float>();
-    vertices->Reserve(Width * Width);
+    TArray<float> vertices = TArray<float>();
+    vertices.Reserve(Width * Width);
 
     for (int32 Y = 0; Y < Width; ++Y)
     {
@@ -98,14 +225,14 @@ TArray<float>& UChunkFunctionLibrary::GetTopLod_Center_Vertices(const FVector2D&
             const float  Z = FMath::PerlinNoise2D(W * m_noiseScale + FVector2D(0.1f))
                 * m_heightMultiplier;
 
-            vertices->Emplace(Z);
+            vertices.Emplace(Z);
         }
     }
 
-    return *vertices;
+    return vertices;
 }
 
-TArray<float>& UChunkFunctionLibrary::GetLod_Additionals_Vertices(
+TArray<FVector> UChunkFunctionLibrary::GetLod_Additionals_Vertices(
     const TArray<float>&        topLodVertices,
     const FVector2D             Pos,
     const uint8                 LOD
@@ -119,9 +246,8 @@ TArray<float>& UChunkFunctionLibrary::GetLod_Additionals_Vertices(
 
     FVector2D Pivot = Pos - FVector2D(Cell);
 
-    /* ---------- outer mesh ---------- */
-    TArray<float>* vertices = new TArray<float>();
-    vertices->Reserve(Width * Width);
+    TArray<FVector> vertices = TArray<FVector>();
+    vertices.Reserve(Width * Width);
 
     for (int X = 0; X < Width; X++)
     {
@@ -129,7 +255,7 @@ TArray<float>& UChunkFunctionLibrary::GetLod_Additionals_Vertices(
         const float Z = FMath::PerlinNoise2D(W * m_noiseScale + FVector2D(0.1f))
             * m_heightMultiplier;
 
-        vertices->Add(Z);
+        vertices.Add({ W.X, W.Y, Z});
     }
 
     for (int Y = 1; Y < Width - 1; Y++)
@@ -137,22 +263,26 @@ TArray<float>& UChunkFunctionLibrary::GetLod_Additionals_Vertices(
         FVector2D W {Pivot.X, Pivot.Y + Y * Cell};
         float  Z = FMath::PerlinNoise2D(W * m_noiseScale + FVector2D(0.1f))
             * m_heightMultiplier;
-        vertices->Add(Z);
+        vertices.Add({W.X, W.Y, Z });
 
-        for (int X = 1; X < Width - 1; X ++)
+        for (int X = 1; X < Width - 1; X++)
         {
             const int32 TopY = step * (Y - 1);
             const int32 TopX = step * (X - 1);
             const int32 Indx = TopY * MaxWidth + TopX;
 
-            vertices->Add(topLodVertices[Indx]);
+            vertices.Add({
+                Pivot.X + X * Cell,
+                Pivot.Y + Y * Cell,
+                topLodVertices[Indx]
+                });
         }
 
         W = { Pivot.X + (Width - 1) * Cell, Pivot.Y + Y * Cell};
         Z = FMath::PerlinNoise2D(W * m_noiseScale + FVector2D(0.1f))
             * m_heightMultiplier;
 
-        vertices->Add(Z);
+        vertices.Add({ W.X, W.Y, Z });
     }
 
     for (int X = 0; X < Width; X++)
@@ -161,89 +291,21 @@ TArray<float>& UChunkFunctionLibrary::GetLod_Additionals_Vertices(
         const float  Z = FMath::PerlinNoise2D(W * m_noiseScale + FVector2D(0.1f))
             * m_heightMultiplier;
 
-        vertices->Add(Z);
+        vertices.Add({ W.X, W.Y, Z });
     }
 
-    return *vertices;
-}
-
-FMeshData UChunkFunctionLibrary::GetChunkData_Border(
-    const FMeshData&            wholeChunk,
-    const FChunkPartSelector&   chunkPartSelector
-)
-{
-    const int32 outterWidth = (1 << (chunkPartSelector.LOD)) + 3;
-    const int32 innerWidth = outterWidth - 2;
-
-    FMeshData* Mesh = new FMeshData(
-    );
-    switch (chunkPartSelector.borderDirection)
-    {
-    case Direction::Left:
-        *Mesh = GetChunkData_Border_Left(wholeChunk, chunkPartSelector.LOD, chunkPartSelector.downscaled);
-        break;
-    case Direction::Right:
-        *Mesh = GetChunkData_Border_Right(wholeChunk, chunkPartSelector.LOD, chunkPartSelector.downscaled);
-        break;
-    case Direction::Up:
-        *Mesh = GetChunkData_Border_Up(wholeChunk, chunkPartSelector.LOD, chunkPartSelector.downscaled);
-        break;
-    default:
-        *Mesh = GetChunkData_Border_Down(wholeChunk, chunkPartSelector.LOD, chunkPartSelector.downscaled);
-        break;
-    }
-
-    UKismetProceduralMeshLibrary::CalculateTangentsForMesh(
-        Mesh->vertices, Mesh->triangles, Mesh->UVs,
-        Mesh->normals, Mesh->tangents);
-
-    FMeshData* Final = new FMeshData(
-        FVector2D(2, innerWidth),
-        true
-    );
-
-    for (int X = 1; X < outterWidth - 1; X++)
-    {
-        int32 Indx = outterWidth + X;
-
-        Final->vertices.Add(Mesh->vertices[Indx]);
-        Final->UVs.Add(Mesh->UVs[Indx]);
-        Final->normals.Add(Mesh->normals[Indx]);
-        Final->tangents.Add(Mesh->tangents[Indx]);
-    }
-    for (int X = 2; X < outterWidth - 2; X++)
-    {
-        int32 Indx = 2 * outterWidth + X;
-
-        Final->vertices.Add(Mesh->vertices[Indx]);
-        Final->UVs.Add(Mesh->UVs[Indx]);
-        Final->normals.Add(Mesh->normals[Indx]);
-        Final->tangents.Add(Mesh->tangents[Indx]);
-    }
-    for (int X = innerWidth; X < 2 * innerWidth - 2; X++)
-    {
-        const int32 B = X - innerWidth + 1;
-        const int32 C = B - 1;
-        const int32 D = X - 1;
-        Final->triangles.Append({ X, B, C,  X, C, D });
-    }
-
-    Final->triangles.Append({innerWidth, 1, 0});
-    Final->triangles.Append({2 * innerWidth - 3, innerWidth - 1, innerWidth - 2});
-
-    delete Mesh;
-    return *Final;
+    return vertices;
 }
 
 FMeshData UChunkFunctionLibrary::GetChunkData_Center(
-    const TArray<float>&        wholeChunk_additionals,
+    const TArray<FVector>&      wholeChunk_additionals,
     const FVector2D             Pos,
     const int8                  LOD
 )
 {
     const int32 DataWidth = (1 << LOD) + 3;
-    const int32 Width = DataWidth - 2;
-    const float Cell = m_chunkWidth / (Width);
+    const int32 Width = DataWidth - 4;
+    const float Cell = m_chunkWidth / (Width + 2);
 
     FMeshData* Mesh = new FMeshData(
         FVector2D(DataWidth, DataWidth),
@@ -256,12 +318,8 @@ FMeshData UChunkFunctionLibrary::GetChunkData_Center(
         {
             const int32 Indx = Y * DataWidth + X;
 
-            const float newZ = wholeChunk_additionals[Indx];
-
-            const FVector2D PosXY = FVector2D(Pos.X + X * Cell, Pos.Y + Y * Cell);
-
-            Mesh->UVs.Add(PosXY * m_UVScale);
-            Mesh->vertices.Add(FVector(PosXY, newZ));
+            Mesh->UVs.Add(FVector2D(wholeChunk_additionals[Indx].X, wholeChunk_additionals[Indx].Y) * m_UVScale);
+            Mesh->vertices.Add(wholeChunk_additionals[Indx]);
 
             if (X && Y)
             {
@@ -285,9 +343,9 @@ FMeshData UChunkFunctionLibrary::GetChunkData_Center(
     );
     
     int InnerIndx = 0;
-    for (int Y = 1; Y < DataWidth - 1; Y++)
+    for (int Y = 2; Y < DataWidth - 2; Y++)
     {
-        for (int X = 1; X < DataWidth - 1; X++)
+        for (int X = 2; X < DataWidth - 2; X++)
         {
             const int32 Indx = Y * DataWidth + X;
     
@@ -296,7 +354,7 @@ FMeshData UChunkFunctionLibrary::GetChunkData_Center(
             Final.tangents.Add(Mesh->tangents[Indx]);
             Final.normals.Add(Mesh->normals[Indx]);
     
-            if (X > 1 && Y > 1)
+            if (Y > 2 && X > 2)
             {
                 const int32 B = InnerIndx - Width;
                 const int32 C = B - 1;
@@ -320,12 +378,15 @@ FChunkLodData& UChunkFunctionLibrary::GenerateChunkData_LOD(
 )
 {
     FChunkLodData* result = new FChunkLodData();
-    TArray<float> highRes_vertices = MoveTemp(GetTopLod_Center_Vertices(Pos));
-    TArray<float> wholeChunk_additionals = MoveTemp(GetLod_Additionals_Vertices(highRes_vertices, Pos, LOD));
+    TArray<float> highRes_vertices = GetTopLod_Vertices(Pos);
+    TArray<FVector> wholeChunk_additionals = GetLod_Additionals_Vertices(highRes_vertices, Pos, LOD);
+    TArray<FVector> wholeChunk_additionals_maxLOD = GetLod_Additionals_Vertices(highRes_vertices, Pos, m_maxLOD);
 
-    result->Center = MoveTemp(GetChunkData_Center(wholeChunk_additionals, Pos, LOD));
-    //result->borders_normal[static_cast<uint8>(Direction::Up)] = MoveTemp(GetChunkData_Border_Up(wholeChunk_additionals, LOD, false));
-    //result->borders_downscaled[static_cast<uint8>(Direction::Up)] = MoveTemp(GetChunkData_Border_Up(wholeChunk_additionals, LOD, true));
+    result->Center = GetChunkData_Center(wholeChunk_additionals, Pos, LOD);
+    result->borders_normal[static_cast<uint8>(Direction::Up)] = GetChunkData_Border_Up(wholeChunk_additionals_maxLOD, LOD, false);
+    result->borders_downscaled[static_cast<uint8>(Direction::Up)] = GetChunkData_Border_Up(wholeChunk_additionals_maxLOD, LOD, true);
+    result->borders_normal[static_cast<uint8>(Direction::Down)] = GetChunkData_Border_Down(wholeChunk_additionals_maxLOD, LOD, false);
+    result->borders_downscaled[static_cast<uint8>(Direction::Down)] = GetChunkData_Border_Down(wholeChunk_additionals_maxLOD, LOD, true);
 
     /*
         Borders will be implemented here too.

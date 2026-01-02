@@ -81,20 +81,28 @@ void UChunkComponent::RefreshChunkVisibility()
     if (m_expectedLodInfos.LOD < 2) return;
 
     FChunkPartSelector center = FChunkPartSelector(m_expectedLodInfos.LOD, Direction::Center);
-    //FChunkPartSelector up_normal = FChunkPartSelector(m_expectedLodInfos.LOD, Direction::Up);
-    //FChunkPartSelector up_downscaled = FChunkPartSelector(m_expectedLodInfos.LOD, Direction::Up, true);
+    FChunkPartSelector up_normal = FChunkPartSelector(m_expectedLodInfos.LOD, Direction::Up);
+    FChunkPartSelector up_downscaled = FChunkPartSelector(m_expectedLodInfos.LOD, Direction::Up, true);
+    FChunkPartSelector down_normal = FChunkPartSelector(m_expectedLodInfos.LOD, Direction::Down);
+    FChunkPartSelector down_downscaled = FChunkPartSelector(m_expectedLodInfos.LOD, Direction::Down, true);
 
     const int32 sectionIndex_center = ConvertPartSelectorToIndex(center);
-    //const int32 sectionIndex_up_normal = ConvertPartSelectorToIndex(up_normal);
-    //const int32 sectionIndex_up_downscaled = ConvertPartSelectorToIndex(up_downscaled);
+    const int32 sectionIndex_up_normal = ConvertPartSelectorToIndex(up_normal);
+    const int32 sectionIndex_up_downscaled = ConvertPartSelectorToIndex(up_downscaled);
+    const int32 sectionIndex_down_normal = ConvertPartSelectorToIndex(down_normal);
+    const int32 sectionIndex_down_downscaled = ConvertPartSelectorToIndex(down_downscaled);
 
     SetMeshSectionVisible(sectionIndex_center, true);
-    //SetMeshSectionVisible(sectionIndex_up_normal, true);
-    //SetMeshSectionVisible(sectionIndex_up_downscaled, true);
+    SetMeshSectionVisible(sectionIndex_up_normal, true);
+    SetMeshSectionVisible(sectionIndex_up_downscaled, true);
+    SetMeshSectionVisible(sectionIndex_down_normal, true);
+    SetMeshSectionVisible(sectionIndex_down_downscaled, true);
 
     m_visibleSections.Add(sectionIndex_center);
-    //m_visibleSections.Add(sectionIndex_up_normal); 
-    //m_visibleSections.Add(sectionIndex_up_downscaled);
+    m_visibleSections.Add(sectionIndex_up_normal); 
+    m_visibleSections.Add(sectionIndex_up_downscaled);
+    m_visibleSections.Add(sectionIndex_down_normal);
+    m_visibleSections.Add(sectionIndex_down_downscaled);
 
     //UE_LOG(LogTemp, Warning, TEXT("Center index : %d"), static_cast<uint8>(sectionIndex_center));
     //UE_LOG(LogTemp, Warning, TEXT("Up normal index : %d"), static_cast<uint8>(sectionIndex_up_normal));
