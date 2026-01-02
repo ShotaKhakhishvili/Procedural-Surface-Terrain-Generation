@@ -90,7 +90,36 @@ FMeshData UChunkFunctionLibrary::GetChunkData_Border_Up(const TArray<FVector>& w
         Mesh.tangents
     );
 
-    return Mesh;
+    FMeshData Final = FMeshData(FVector2D(realWidth, 2), true);
+
+    for (int32 i = realWidth + 1; i < 2 * realWidth - 1; i++)
+    {
+        Final.vertices.Add(Mesh.vertices[i]);
+        Final.UVs.Add(Mesh.UVs[i]);
+        Final.tangents.Add(Mesh.tangents[i]);
+        Final.normals.Add(Mesh.normals[i]);
+    }
+
+    for (int32 i = 2 * realWidth + 2; i < 3 * realWidth - 2; i++)
+    {
+        Final.vertices.Add(Mesh.vertices[i]);
+        Final.UVs.Add(Mesh.UVs[i]);
+        Final.tangents.Add(Mesh.tangents[i]);
+        Final.normals.Add(Mesh.normals[i]);
+    }
+
+    for (int32 i = realWidth - 2; i < 2 * realWidth - 7; i++)
+    {
+        const int32 A = i - (realWidth - 3);
+        const int32 B = A + 1;
+        const int32 C = i;
+
+        Final.triangles.Append({ C, i + 1, B, A, C, B });
+    }
+
+    Final.triangles.Append({ 1, 0, realWidth - 2, realWidth -3, realWidth-4, 2 * realWidth - 7 });
+
+    return Final;
 }
 
 FMeshData UChunkFunctionLibrary::GetChunkData_Border_Down(
