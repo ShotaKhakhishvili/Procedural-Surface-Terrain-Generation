@@ -8,14 +8,16 @@ float		UChunkFunctionLibrary::m_chunkWidth         = 12800;
 float       UChunkFunctionLibrary::m_UVScale            = 0.1;
 uint8       UChunkFunctionLibrary::m_maxLOD             = 8;
 
-FMeshData UChunkFunctionLibrary::GetChunkData_Border_Up(const TArray<FVector>& wholeChunk_additionalsVerts, const uint8 LOD, const bool downscale)
+FMeshData UChunkFunctionLibrary::GetChunkData_Border_Up(
+    const TArray<FVector>&  wholeChunk_additionalsVerts, 
+    const uint8             LOD, 
+    const bool              downscale
+)
 {
     const int32 dataWidth = (1 << m_maxLOD) + 3;
     const int32 step = (1 << (m_maxLOD - LOD));
     const int32 realWidth = (1 << LOD) + 3;
     const int32 edge = step * 3 + 1;
-
-    UE_LOG(LogTemp, Log, TEXT("Step: %d, realWidth: %d"), step, realWidth);
 
     FMeshData Mesh(
         FVector2D(realWidth, 4),
@@ -50,24 +52,28 @@ FMeshData UChunkFunctionLibrary::GetChunkData_Border_Up(const TArray<FVector>& w
             // We use an approximated coord for the vertice if the X axis is even, meaning, the lower LOD would not have a vertice there and it would
             // Just have a lerp coord of the previous and the next vertice
             // This is only for the downscaled case btw
-            if (downscale && Y == (step + 1) && ((X - 1) % (step * 2) == step))
+            if (downscale && Y == 1 && ((X - 1) % (step * 2) == step))
             {
-                Mesh.vertices.Add(0.5f * (wholeChunk_additionalsVerts[FMath::Max(Indx - step, 0)] +
-                    wholeChunk_additionalsVerts[FMath::Min(Indx + step, dataWidth - 1)]
-                    ));
+                const int32 Lx = FMath::Clamp(X - step, 0, dataWidth - 1);
+                const int32 Rx = FMath::Clamp(X + step, 0, dataWidth - 1);
+
+                const FVector V =
+                    0.5f * (wholeChunk_additionalsVerts[Y * dataWidth + Lx] +
+                        wholeChunk_additionalsVerts[Y * dataWidth + Rx]);
+
+                Mesh.vertices.Add(V);
+                Mesh.UVs.Add(FVector2D(V.X, V.Y) * m_UVScale);
             }
             else
             {
                 Mesh.vertices.Add(wholeChunk_additionalsVerts[Indx]);
+                Mesh.UVs.Add(FVector2D(wholeChunk_additionalsVerts[Indx].X, wholeChunk_additionalsVerts[Indx].Y) * m_UVScale);
             }
-            Mesh.UVs.Add(FVector2D(wholeChunk_additionalsVerts[Indx].X, wholeChunk_additionalsVerts[Indx].Y) * m_UVScale);
         }
 
         Mesh.vertices.Add(wholeChunk_additionalsVerts[(dataWidth - 1) + Y * dataWidth]);
         Mesh.UVs.Add(FVector2D(wholeChunk_additionalsVerts[(dataWidth - 1) + Y * dataWidth].X, wholeChunk_additionalsVerts[(dataWidth - 1) + Y * dataWidth].Y) * m_UVScale);
     }
-
-    //Mesh.triangles.Append({ 2 * realWidth + 1 , realWidth + 1, realWidth});
 
     for (int32 i = 1; i < 4; i++)
     {
@@ -123,17 +129,15 @@ FMeshData UChunkFunctionLibrary::GetChunkData_Border_Up(const TArray<FVector>& w
 }
 
 FMeshData UChunkFunctionLibrary::GetChunkData_Border_Down(
-    const TArray<FVector>& wholeChunk_additionalsVerts,
-    const uint8            LOD,
-    const bool             downscale
+    const TArray<FVector>&  wholeChunk_additionalsVerts,
+    const uint8             LOD,
+    const bool              downscale
 )
 {
     const int32 dataWidth = (1 << m_maxLOD) + 3;
     const int32 step = (1 << (m_maxLOD - LOD));
     const int32 realWidth = (1 << LOD) + 3;
     const int32 edge = step * 3 + 1;
-
-    UE_LOG(LogTemp, Log, TEXT("Down Border | Step: %d, realWidth: %d"), step, realWidth);
 
     FMeshData Mesh(FVector2D(realWidth, 4), false);
 
@@ -177,7 +181,7 @@ FMeshData UChunkFunctionLibrary::GetChunkData_Border_Down(
             const int32 SrcIdx = SrcY * dataWidth + X;
 
             // Same stitch condition as Up (just on the "first inner stitch row" of this border patch)
-            if (downscale && LocalY == (step + 1) && ((X - 1) % (step * 2) == step))
+            if (downscale && LocalY == 1 && ((X - 1) % (step * 2) == step))
             {
                 const int32 Lx = FMath::Clamp(X - step, 0, dataWidth - 1);
                 const int32 Rx = FMath::Clamp(X + step, 0, dataWidth - 1);
@@ -186,7 +190,7 @@ FMeshData UChunkFunctionLibrary::GetChunkData_Border_Down(
                     0.5f * (wholeChunk_additionalsVerts[SrcY * dataWidth + Lx] +
                         wholeChunk_additionalsVerts[SrcY * dataWidth + Rx]);
 
-                AddVU(V);
+                AddVU(V); // UV from V
             }
             else
             {
@@ -198,13 +202,6 @@ FMeshData UChunkFunctionLibrary::GetChunkData_Border_Down(
         AddVU(wholeChunk_additionalsVerts[SrcY * dataWidth + (dataWidth - 1)]);
     }
 
-    // ------------------------------------------------------------
-    // FIX FOR "FLIPPED" RESULT:
-    // Because this border patch is generated while moving "up" in world Y
-    // (SrcY decreases as we append rows), the winding would be inverted if
-    // we used the same triangle order as Border_Up.
-    // So we reverse the winding here (swap B<->C per triangle).
-    // ------------------------------------------------------------
     for (int32 i = 1; i < 4; i++)
     {
         for (int32 j = 1; j < realWidth; j++)
@@ -227,7 +224,6 @@ FMeshData UChunkFunctionLibrary::GetChunkData_Border_Down(
         Mesh.tangents
     );
 
-    // ---- Cut out the same "green strip" as Border_Up ----
     FMeshData Final(FVector2D(realWidth, 2), true);
 
     for (int32 i = realWidth + 1; i < 2 * realWidth - 1; i++)
@@ -246,20 +242,15 @@ FMeshData UChunkFunctionLibrary::GetChunkData_Border_Down(
         Final.normals.Add(Mesh.normals[i]);
     }
 
-    // Rebuild Final triangles with the SAME reversed winding
     for (int32 i = realWidth - 2; i < 2 * realWidth - 7; i++)
     {
         const int32 A = i - (realWidth - 3);
         const int32 B = A + 1;
         const int32 C = i;
 
-        // original was: { C, i+1, B,  A, C, B }
-        // reversed winding:
         Final.triangles.Append({ C, B, i + 1,  A, B, C });
     }
 
-    // original was: { 1, 0, realWidth-2,  realWidth-3, realWidth-4, 2*realWidth-7 }
-    // reversed per-triangle:
     Final.triangles.Append({
         1, realWidth - 2, 0,
         realWidth - 3, 2 * realWidth - 7, realWidth - 4
@@ -268,16 +259,270 @@ FMeshData UChunkFunctionLibrary::GetChunkData_Border_Down(
     return Final;
 }
 
-FMeshData UChunkFunctionLibrary::GetChunkData_Border_Left(const FMeshData& wholeChunk_additionals_MaxLOD, const uint8 LOD, const bool downscale)
+FMeshData UChunkFunctionLibrary::GetChunkData_Border_Left(
+    const TArray<FVector>& wholeChunk_additionalsVerts,
+    const uint8            LOD,
+    const bool             downscale
+)
 {
-    return *(new FMeshData());
-}
-FMeshData UChunkFunctionLibrary::GetChunkData_Border_Right(const FMeshData& wholeChunk_additionals_MaxLOD, const uint8 LOD, const bool downscale)
-{
-    return *(new FMeshData());
+    const int32 dataWidth = (1 << m_maxLOD) + 3;
+    const int32 step = (1 << (m_maxLOD - LOD));
+    const int32 realWidth = (1 << LOD) + 3;
+    const int32 edge = step * 3 + 1;
+
+    FMeshData Mesh(FVector2D(realWidth, 4), false);
+
+    auto AddVU = [&](const FVector& V)
+        {
+            Mesh.vertices.Add(V);
+            Mesh.UVs.Add(FVector2D(V.X, V.Y) * m_UVScale);
+        };
+
+    // LocalX goes "rightward from left border" (0..edge) -> SrcX is the same
+    auto SrcXFromLocalX = [&](int32 LocalX) -> int32
+        {
+            return LocalX;
+        };
+
+    // ---- Row 0 (outermost left border column) ----
+    {
+        const int32 SrcX = 0;
+
+        AddVU(wholeChunk_additionalsVerts[0 * dataWidth + SrcX]);
+
+        for (int32 Y = 1; Y < dataWidth - 1; Y += step)
+        {
+            AddVU(wholeChunk_additionalsVerts[Y * dataWidth + SrcX]);
+        }
+
+        AddVU(wholeChunk_additionalsVerts[(dataWidth - 1) * dataWidth + SrcX]);
+    }
+
+    // ---- Next rows going inward from the left border region ----
+    const int32 MaxLocalX = FMath::Min(edge, dataWidth - 1);
+    for (int32 LocalX = 1; LocalX <= MaxLocalX; LocalX += step)
+    {
+        const int32 SrcX = SrcXFromLocalX(LocalX);
+
+        // top
+        AddVU(wholeChunk_additionalsVerts[0 * dataWidth + SrcX]);
+
+        for (int32 Y = 1; Y < dataWidth - 1; Y += step)
+        {
+            const int32 SrcIdx = Y * dataWidth + SrcX;
+
+            // Stitch on the "first inner stitch column" of this border patch
+            if (downscale && LocalX == 1 && ((Y - 1) % (step * 2) == step))
+            {
+                const int32 Uy = FMath::Clamp(Y - step, 0, dataWidth - 1);
+                const int32 Dy = FMath::Clamp(Y + step, 0, dataWidth - 1);
+
+                const FVector V =
+                    0.5f * (wholeChunk_additionalsVerts[Uy * dataWidth + SrcX] +
+                        wholeChunk_additionalsVerts[Dy * dataWidth + SrcX]);
+
+                AddVU(V); // UV from V
+            }
+            else
+            {
+                AddVU(wholeChunk_additionalsVerts[SrcIdx]);
+            }
+        }
+
+        // bottom
+        AddVU(wholeChunk_additionalsVerts[(dataWidth - 1) * dataWidth + SrcX]);
+    }
+
+    // NOTE: winding flipped (your triangles were reversed)
+    for (int32 i = 1; i < 4; i++)
+    {
+        for (int32 j = 1; j < realWidth; j++)
+        {
+            const int32 B = (i - 1) * realWidth + j;
+            const int32 C = B - 1;
+            const int32 D = i * realWidth + j - 1;
+            const int32 A = D + 1;
+
+            Mesh.triangles.Append({ A, C, B,  A, D, C });
+        }
+    }
+
+    UKismetProceduralMeshLibrary::CalculateTangentsForMesh(
+        Mesh.vertices,
+        Mesh.triangles,
+        Mesh.UVs,
+        Mesh.normals,
+        Mesh.tangents
+    );
+
+    FMeshData Final(FVector2D(realWidth, 2), true);
+
+    for (int32 i = realWidth + 1; i < 2 * realWidth - 1; i++)
+    {
+        Final.vertices.Add(Mesh.vertices[i]);
+        Final.UVs.Add(Mesh.UVs[i]);
+        Final.tangents.Add(Mesh.tangents[i]);
+        Final.normals.Add(Mesh.normals[i]);
+    }
+
+    for (int32 i = 2 * realWidth + 2; i < 3 * realWidth - 2; i++)
+    {
+        Final.vertices.Add(Mesh.vertices[i]);
+        Final.UVs.Add(Mesh.UVs[i]);
+        Final.tangents.Add(Mesh.tangents[i]);
+        Final.normals.Add(Mesh.normals[i]);
+    }
+
+    // NOTE: winding flipped (your triangles were reversed)
+    for (int32 i = realWidth - 2; i < 2 * realWidth - 7; i++)
+    {
+        const int32 A = i - (realWidth - 3);
+        const int32 B = A + 1;
+        const int32 C = i;
+
+        Final.triangles.Append({ C, B, i + 1,  A, B, C });
+    }
+
+    Final.triangles.Append({
+        1, realWidth - 2, 0,
+        realWidth - 3, 2 * realWidth - 7, realWidth - 4
+        });
+
+    return Final;
 }
 
-TArray<float> UChunkFunctionLibrary::GetTopLod_Vertices(const FVector2D& Pos)
+FMeshData UChunkFunctionLibrary::GetChunkData_Border_Right(
+    const TArray<FVector>& wholeChunk_additionalsVerts,
+    const uint8            LOD,
+    const bool             downscale
+)
+{
+    const int32 dataWidth = (1 << m_maxLOD) + 3;
+    const int32 step = (1 << (m_maxLOD - LOD));
+    const int32 realWidth = (1 << LOD) + 3;
+    const int32 edge = step * 3 + 1;
+
+    FMeshData Mesh(FVector2D(realWidth, 4), false);
+
+    auto AddVU = [&](const FVector& V)
+        {
+            Mesh.vertices.Add(V);
+            Mesh.UVs.Add(FVector2D(V.X, V.Y) * m_UVScale);
+        };
+
+    // LocalX goes "leftward from right border" (0..edge) -> SrcX goes (dataWidth-1 .. downwards)
+    auto SrcXFromLocalX = [&](int32 LocalX) -> int32
+        {
+            return (dataWidth - 1) - LocalX;
+        };
+
+    // ---- Row 0 (outermost right border column) ----
+    {
+        const int32 SrcX = dataWidth - 1;
+
+        AddVU(wholeChunk_additionalsVerts[0 * dataWidth + SrcX]);
+
+        for (int32 Y = 1; Y < dataWidth - 1; Y += step)
+        {
+            AddVU(wholeChunk_additionalsVerts[Y * dataWidth + SrcX]);
+        }
+
+        AddVU(wholeChunk_additionalsVerts[(dataWidth - 1) * dataWidth + SrcX]);
+    }
+
+    // ---- Next rows going inward from the right border region ----
+    const int32 MaxLocalX = FMath::Min(edge, dataWidth - 1);
+    for (int32 LocalX = 1; LocalX <= MaxLocalX; LocalX += step)
+    {
+        const int32 SrcX = SrcXFromLocalX(LocalX);
+
+        // top
+        AddVU(wholeChunk_additionalsVerts[0 * dataWidth + SrcX]);
+
+        for (int32 Y = 1; Y < dataWidth - 1; Y += step)
+        {
+            const int32 SrcIdx = Y * dataWidth + SrcX;
+
+            // Stitch on the "first inner stitch column" of this border patch
+            if (downscale && LocalX == 1 && ((Y - 1) % (step * 2) == step))
+            {
+                const int32 Uy = FMath::Clamp(Y - step, 0, dataWidth - 1);
+                const int32 Dy = FMath::Clamp(Y + step, 0, dataWidth - 1);
+
+                const FVector V =
+                    0.5f * (wholeChunk_additionalsVerts[Uy * dataWidth + SrcX] +
+                        wholeChunk_additionalsVerts[Dy * dataWidth + SrcX]);
+
+                AddVU(V); // UV from V
+            }
+            else
+            {
+                AddVU(wholeChunk_additionalsVerts[SrcIdx]);
+            }
+        }
+
+        // bottom
+        AddVU(wholeChunk_additionalsVerts[(dataWidth - 1) * dataWidth + SrcX]);
+    }
+
+    // NOTE: winding flipped back (your triangles were reversed)
+    for (int32 i = 1; i < 4; i++)
+    {
+        for (int32 j = 1; j < realWidth; j++)
+        {
+            const int32 B = (i - 1) * realWidth + j;
+            const int32 C = B - 1;
+            const int32 D = i * realWidth + j - 1;
+            const int32 A = D + 1;
+
+            Mesh.triangles.Append({ A, B, C,  A, C, D });
+        }
+    }
+
+    UKismetProceduralMeshLibrary::CalculateTangentsForMesh(
+        Mesh.vertices,
+        Mesh.triangles,
+        Mesh.UVs,
+        Mesh.normals,
+        Mesh.tangents
+    );
+
+    FMeshData Final(FVector2D(realWidth, 2), true);
+
+    for (int32 i = realWidth + 1; i < 2 * realWidth - 1; i++)
+    {
+        Final.vertices.Add(Mesh.vertices[i]);
+        Final.UVs.Add(Mesh.UVs[i]);
+        Final.tangents.Add(Mesh.tangents[i]);
+        Final.normals.Add(Mesh.normals[i]);
+    }
+
+    for (int32 i = 2 * realWidth + 2; i < 3 * realWidth - 2; i++)
+    {
+        Final.vertices.Add(Mesh.vertices[i]);
+        Final.UVs.Add(Mesh.UVs[i]);
+        Final.tangents.Add(Mesh.tangents[i]);
+        Final.normals.Add(Mesh.normals[i]);
+    }
+
+    // NOTE: winding flipped back (your triangles were reversed)
+    for (int32 i = realWidth - 2; i < 2 * realWidth - 7; i++)
+    {
+        const int32 A = i - (realWidth - 3);
+        const int32 B = A + 1;
+        const int32 C = i;
+
+        Final.triangles.Append({ C, i + 1, B,  A, C, B });
+    }
+
+    Final.triangles.Append({ 1, 0, realWidth - 2,  realWidth - 3, realWidth - 4, 2 * realWidth - 7 });
+
+    return Final;
+}
+
+TArray<float> UChunkFunctionLibrary::GetTopLod_Vertices(
+    const FVector2D&    Pos
+)
 {
     const int32 Width = (1 << m_maxLOD) + 1;
     const float Cell = m_chunkWidth / (Width - 1);
@@ -455,10 +700,10 @@ FChunkLodData& UChunkFunctionLibrary::GenerateChunkData_LOD(
     result->borders_downscaled[static_cast<uint8>(Direction::Up)] = GetChunkData_Border_Up(wholeChunk_additionals_maxLOD, LOD, true);
     result->borders_normal[static_cast<uint8>(Direction::Down)] = GetChunkData_Border_Down(wholeChunk_additionals_maxLOD, LOD, false);
     result->borders_downscaled[static_cast<uint8>(Direction::Down)] = GetChunkData_Border_Down(wholeChunk_additionals_maxLOD, LOD, true);
-
-    /*
-        Borders will be implemented here too.
-    */
+    result->borders_normal[static_cast<uint8>(Direction::Left)] = GetChunkData_Border_Left(wholeChunk_additionals_maxLOD, LOD, false);
+    result->borders_downscaled[static_cast<uint8>(Direction::Left)] = GetChunkData_Border_Left(wholeChunk_additionals_maxLOD, LOD, true);
+    result->borders_normal[static_cast<uint8>(Direction::Right)] = GetChunkData_Border_Right(wholeChunk_additionals_maxLOD, LOD, false);
+    result->borders_downscaled[static_cast<uint8>(Direction::Right)] = GetChunkData_Border_Right(wholeChunk_additionals_maxLOD, LOD, true);
 
     return *result;
 }

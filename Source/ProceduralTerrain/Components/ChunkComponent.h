@@ -14,7 +14,6 @@ class PROCEDURALTERRAIN_API UChunkComponent : public UProceduralMeshComponent
 	GENERATED_BODY()
 private:
 	FChunkData				m_chunkData;
-	TArray<int32>			m_visibleSections;
 	FChunkLodInfos			m_expectedLodInfos;
 public:
 
@@ -24,19 +23,19 @@ public:
 
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
-	FORCEINLINE bool ContainsLOD(uint8 LOD)
+	FORCEINLINE bool ContainsLOD(uint32 LOD)
 	{
 		return m_chunkData.ContainsLOD(LOD);
 ;	}
 
 	void AddLodData(
 		FChunkLodData&		chunkLodData, 
-		const uint8			LOD
+		const uint32			LOD
 	);
 
 	void CreateNewMeshSection(const FMeshData&, const FChunkPartSelector&);
 
-	void SetFutureVisibilityToClosestLOD(const uint8 lod);
+	void SetFutureVisibilityToClosestLOD(const uint32 lod);
 
 	void RefreshChunkVisibility();
 

@@ -56,8 +56,16 @@ public:
                                                 const uint8                 LOD,
                                                 const bool                  downscale
                                                 );
-    static FMeshData GetChunkData_Border_Left   (const FMeshData& wholeChunk_additionals_MaxLOD, const uint8 LOD, const bool downscale);
-    static FMeshData GetChunkData_Border_Right  (const FMeshData& wholeChunk_additionals_MaxLOD, const uint8 LOD, const bool downscale);
+    static FMeshData GetChunkData_Border_Left   (
+                                                const TArray<FVector>&      wholeChunk_additionalsVerts,
+                                                const uint8                 LOD,
+                                                const bool                  downscale
+                                                );
+    static FMeshData GetChunkData_Border_Right  (
+                                                const TArray<FVector>&      wholeChunk_additionalsVerts,
+                                                const uint8                 LOD,
+                                                const bool                  downscale
+                                                );
 
     static TArray<float> GetTopLod_Vertices( // Simply, only generating the Z positions of the vertices of the LOD 0 chunk
         const FVector2D&            Pos

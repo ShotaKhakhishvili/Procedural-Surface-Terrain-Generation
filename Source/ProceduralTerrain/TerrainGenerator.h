@@ -32,7 +32,7 @@ private:
 
 	TArray<FArrayUint8>								m_lodMatrix;
 
-	TMap<FVector2D, UChunkComponent*>				m_map_chunkComponents;
+	TMap<FVector2D, UChunkComponent*>				m_map_chunkComponents; 
 	TMap<FVector2D, uint8>							m_map_chunkDatasToGenerate;			//	chunk datas in queue or being generated right now
 
 	TArray<TFuture<FChunkLodData*>>					m_array_futureMeshDatas;			//	chunk datas that are begin generated right now
@@ -53,7 +53,7 @@ public:
 		const bool					forceIfEmptyThread
 	);
 
-	UFUNCTION(BlueprintCallable, meta = (ReturnDisplayName = "Success", ToolTip = "Returns true if there was a free thread that started the requested generation"))
+	UFUNCTION(BlueprintCallable, meta = (ToolTip = "Starts some generation if any of the threads are free"))
 	FORCEINLINE void AskToGenerate_PossibleData();
 	
 	UFUNCTION(BlueprintCallable)

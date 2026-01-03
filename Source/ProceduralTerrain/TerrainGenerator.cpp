@@ -25,7 +25,7 @@ void ATerrainGenerator::Initialize(AActor* observedActor)
 	m_array_futureMeshDatas.SetNum(m_maxThreads);
 	m_array_futureChunkLODs.SetNum(m_maxThreads);
 	m_freeThreads = m_maxThreads;
-
+	 
 	m_observedActor = observedActor;
 	TArray<uint8>	lodMap_horizontal;
 
@@ -161,19 +161,21 @@ void ATerrainGenerator::AskToGenerate_Data(
 {
 	if (!forceIfEmptyThread)
 	{		
-		// If the data is alread in the queue, we return imidiately.
+		// If the data is alread in the queue, we update its LOD.
 		if (m_map_chunkDatasToGenerate.Contains(chunkIndex))
 		{
 			m_map_chunkDatasToGenerate[chunkIndex] = LOD;
-		}else
+		}else // Otherwise we add it into the queue
 		{
 			m_map_chunkDatasToGenerate.Add(chunkIndex, LOD);
 		}
 		return;
 	}
 
+	// If no free threads, we retun.
 	if (m_freeThreads == 0) return;
 
+	// We iterate through the threads, and if their futures are invalid, that means they are free and we add another working proccess
 	for (int i = 0; i < m_maxThreads; i++)
 	{
 		if (!m_array_futureMeshDatas[i].IsValid())
@@ -196,8 +198,10 @@ inline void ATerrainGenerator::AskToGenerate_PossibleData()
 	if(m_freeThreads == 0 || m_map_chunkDatasToGenerate.IsEmpty())
 		return;
 
+	// We just take the first chunk in the queue
 	auto entry = m_map_chunkDatasToGenerate.begin();
 
+	// Then force it to be generated, meaning, its not gonna go to the queue, but directly start the generation on some free thread
 	AskToGenerate_Data(entry->Key, entry->Value, true);
 }
 
