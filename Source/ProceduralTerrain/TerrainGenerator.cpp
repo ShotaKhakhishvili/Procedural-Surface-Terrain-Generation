@@ -205,17 +205,14 @@ inline void ATerrainGenerator::AskToGenerate_PossibleData()
 	AskToGenerate_Data(entry->Key, entry->Value, true);
 }
 
-void ATerrainGenerator::AskToDisplayChunks(
-)
+void ATerrainGenerator::AskToDisplayChunks()
 {
 	for (auto it : m_array_visibleChunks)
 	{
 		it->SetFutureLOD(FChunkLodInfos());
 	}
 
-	const int renderWidth = m_renderHalfWidth + m_renderHalfWidth;
-	const float chunkWidth = UChunkFunctionLibrary::GetChunkWidth();
-
+	const int32 renderWidth = m_renderHalfWidth + m_renderHalfWidth;
 	m_array_visibleChunks.Empty(renderWidth * renderWidth);
 
 	const FVector2D startIdx = GetClosestCorner() - m_renderHalfWidth;
@@ -224,27 +221,52 @@ void ATerrainGenerator::AskToDisplayChunks(
 	{
 		for (int32 X = 0; X < renderWidth; X++)
 		{
-			const FVector2D chunkIdx = startIdx + FVector2D(Y, X);
+			// FIX: X is X, Y is Y
+			const FVector2D chunkIdx = startIdx + FVector2D(X, Y);
 
-			if (m_lodMatrix[Y].array[X] > 1)
+			const uint8 ThisLOD = (uint8)m_lodMatrix[Y].array[X];
+
+			if (ThisLOD > 1)
 			{
+				// Neighbor sampling in the same render window
+				auto GetNeighborLOD = [&](int32 Ny, int32 Nx) -> uint8
+					{
+						if (Ny < 0 || Ny >= renderWidth || Nx < 0 || Nx >= renderWidth)
+							return ThisLOD;
+
+						return (uint8)m_lodMatrix[Ny].array[Nx];
+					};
+
+				// Left=X-1 Right=X+1 Up=Y-1 Down=Y+1
+				const uint8 LOD_Left = GetNeighborLOD(Y, X - 1);
+				const uint8 LOD_Right = GetNeighborLOD(Y, X + 1);
+				const uint8 LOD_Up = GetNeighborLOD(Y - 1, X);
+				const uint8 LOD_Down = GetNeighborLOD(Y + 1, X);
+
+				// Downscale this border if the neighbor is COARSER (lower LOD number)
+				const bool bDownscaleLeft = (LOD_Left > 1) && (LOD_Left < ThisLOD);
+				const bool bDownscaleRight = (LOD_Right > 1) && (LOD_Right < ThisLOD);
+				const bool bDownscaleUp = (LOD_Up > 1) && (LOD_Up < ThisLOD);
+				const bool bDownscaleDown = (LOD_Down > 1) && (LOD_Down < ThisLOD);
 
 				if (m_map_chunkComponents.Contains(chunkIdx))
 				{
 					UChunkComponent* component = m_map_chunkComponents[chunkIdx];
-					if (component->ContainsLOD(m_lodMatrix[Y].array[X])) 
+
+					if (component->ContainsLOD(ThisLOD))
 					{
-						component->SetFutureLOD(FChunkLodInfos(m_lodMatrix[Y].array[X], 0,0,0,0));
+						component->SetFutureLOD(FChunkLodInfos(ThisLOD, bDownscaleLeft, bDownscaleRight, bDownscaleUp, bDownscaleDown));
 						m_array_visibleChunks.Add(component);
 					}
-					else {
-						AskToGenerate_Data(chunkIdx, m_lodMatrix[Y].array[X], false);
-						component->SetFutureVisibilityToClosestLOD(m_lodMatrix[Y].array[X]);
+					else
+					{
+						AskToGenerate_Data(chunkIdx, ThisLOD, false);
+						component->SetFutureVisibilityToClosestLOD(ThisLOD);
 					}
 				}
 				else
 				{
-					AskToGenerate_Data(chunkIdx, m_lodMatrix[Y].array[X], false);
+					AskToGenerate_Data(chunkIdx, ThisLOD, false);
 				}
 			}
 			else
@@ -257,5 +279,6 @@ void ATerrainGenerator::AskToDisplayChunks(
 		}
 	}
 }
+
 
 
