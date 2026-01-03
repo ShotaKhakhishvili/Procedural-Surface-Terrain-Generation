@@ -33,7 +33,6 @@ void UChunkComponent::AddLodData(FChunkLodData& chunkLodData, const uint32 LOD)
     CreateNewMeshSection(chunkLodData.borders_downscaled[static_cast<uint32>(Direction::Left)], FChunkPartSelector(LOD, Direction::Left, true));
     CreateNewMeshSection(chunkLodData.borders_normal[static_cast<uint32>(Direction::Right)], FChunkPartSelector(LOD, Direction::Right));
     CreateNewMeshSection(chunkLodData.borders_downscaled[static_cast<uint32>(Direction::Right)], FChunkPartSelector(LOD, Direction::Right, true));
-
     m_chunkData.AddNewLOD(LOD, MoveTemp(chunkLodData));
 }
 
@@ -42,6 +41,8 @@ void UChunkComponent::CreateNewMeshSection(const FMeshData& meshData, const FChu
     const uint8 sectionIndex = ConvertPartSelectorToIndex(chunkPartSelector);
 
     ClearMeshSection(sectionIndex);
+
+    m_visibleSections.Add(sectionIndex);
 
     TArray<FColor> VertexColors;
     VertexColors.Init(FColor::White, meshData.vertices.Num());
@@ -56,6 +57,7 @@ void UChunkComponent::CreateNewMeshSection(const FMeshData& meshData, const FChu
         meshData.tangents,                                              // Tangents (can be empty)
         (chunkPartSelector.LOD == UChunkFunctionLibrary::GetMaxLOD())   // Enable collision
     );
+    SetMeshSectionVisible(sectionIndex, false);
 }
 
 FORCEINLINE uint32 UChunkComponent::ConvertPartSelectorToIndex(const FChunkPartSelector& sel) const
@@ -83,6 +85,13 @@ void UChunkComponent::SetFutureLOD(FChunkLodInfos futureLodInfos)
 
 void UChunkComponent::RefreshChunkVisibility()
 {
+    for (int32 i = 0; i < m_visibleSections.Num(); i++)
+    {
+        SetMeshSectionVisible(m_visibleSections[i], false);
+    }
+
+    m_visibleSections.Empty(5);
+
     if (m_expectedLodInfos.LOD < 1) return;
 
     FChunkPartSelector center = FChunkPartSelector(m_expectedLodInfos.LOD, Direction::Center);
@@ -105,20 +114,57 @@ void UChunkComponent::RefreshChunkVisibility()
     const int32 sectionIndex_right_normal = ConvertPartSelectorToIndex(right_normal);
     const int32 sectionIndex_right_downscaled = ConvertPartSelectorToIndex(right_downscaled);
 
-    const bool donwscaleUp      = m_expectedLodInfos.GetDownscale(Direction::Up);
-    const bool donwscaleDowm    = m_expectedLodInfos.GetDownscale(Direction::Down);
-    const bool donwscaleLeft    = m_expectedLodInfos.GetDownscale(Direction::Left);
-    const bool donwscaleRight   = m_expectedLodInfos.GetDownscale(Direction::Right);
+    const bool donwscaleUp = m_expectedLodInfos.GetDownscale(Direction::Up);
+    const bool donwscaleDown = m_expectedLodInfos.GetDownscale(Direction::Down);
+    const bool downscaleLeft = m_expectedLodInfos.GetDownscale(Direction::Left);
+    const bool downscaleRight = m_expectedLodInfos.GetDownscale(Direction::Right);
 
     SetMeshSectionVisible(sectionIndex_center, true);
-    SetMeshSectionVisible(sectionIndex_up_normal, !donwscaleUp);
-    SetMeshSectionVisible(sectionIndex_up_downscaled, donwscaleUp);
-    SetMeshSectionVisible(sectionIndex_down_normal, !donwscaleDowm);
-    SetMeshSectionVisible(sectionIndex_down_downscaled, donwscaleDowm);
-    SetMeshSectionVisible(sectionIndex_left_normal, !donwscaleLeft);
-    SetMeshSectionVisible(sectionIndex_left_downscaled, donwscaleLeft);
-    SetMeshSectionVisible(sectionIndex_right_normal, !donwscaleRight);
-    SetMeshSectionVisible(sectionIndex_right_downscaled, donwscaleRight);
+    m_visibleSections.Add(sectionIndex_center);
+
+    if (!donwscaleUp) {
+        SetMeshSectionVisible(sectionIndex_up_normal, true);
+        m_visibleSections.Add(sectionIndex_up_normal);
+    }
+    else
+    {
+        SetMeshSectionVisible(sectionIndex_up_downscaled, true);
+        m_visibleSections.Add(sectionIndex_up_downscaled);
+    }
+    if (!donwscaleDown)
+    {
+        SetMeshSectionVisible(sectionIndex_down_normal, true);
+        m_visibleSections.Add(sectionIndex_down_normal);
+
+    }
+    else
+    {
+        SetMeshSectionVisible(sectionIndex_down_downscaled, true);
+        m_visibleSections.Add(sectionIndex_down_downscaled);
+    }
+    if (!downscaleLeft)
+    {
+        SetMeshSectionVisible(sectionIndex_left_normal, true);
+        m_visibleSections.Add(sectionIndex_left_normal);
+
+    }
+    else
+    {
+        SetMeshSectionVisible(sectionIndex_left_downscaled, true);
+        m_visibleSections.Add(sectionIndex_left_downscaled);
+
+    }
+    if (!downscaleRight)
+    {
+        SetMeshSectionVisible(sectionIndex_right_normal, true);
+        m_visibleSections.Add(sectionIndex_right_normal);
+
+    }
+    else
+    {
+        SetMeshSectionVisible(sectionIndex_right_downscaled, true);
+        m_visibleSections.Add(sectionIndex_right_downscaled);
+    }
 }
 
 void UChunkComponent::SetFutureVisibilityToClosestLOD(const uint32 lod)

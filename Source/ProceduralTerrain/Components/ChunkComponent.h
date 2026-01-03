@@ -14,6 +14,7 @@ class PROCEDURALTERRAIN_API UChunkComponent : public UProceduralMeshComponent
 	GENERATED_BODY()
 private:
 	FChunkData				m_chunkData;
+	TArray<int32>			m_visibleSections;
 	FChunkLodInfos			m_expectedLodInfos;
 public:
 
